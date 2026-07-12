@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/Users/bobbob/Downloads/PI CAM/**)",
+      "Write(/Users/bobbob/Downloads/PI CAM/**)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(git *)"
+    ],
+    "deny": [
+      "Read(/Users/bobbob/Documents/**)",
+      "Read(/Users/bobbob/Desktop/**)",
+      "Read(/Users/bobbob/Pictures/**)",
+      "Read(/Users/bobbob/.ssh/**)",
+      "Read(/Users/bobbob/.zshrc)",
+      "Read(/Users/bobbob/.bash_profile)"
+    ]
+  }
+}

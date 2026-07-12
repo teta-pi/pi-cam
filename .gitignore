@@ -1,0 +1,35 @@
+# expo-cli managed
+expo-env.d.ts
+.expo/
+
+# dependencies
+node_modules/
+
+# build outputs
+.next/
+dist/
+build/
+ios/
+android/
+
+# native builds
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# macOS
+.DS_Store
+
+# env files
+.env
+.env.local
+.env.*
+
+# editor
+.idea/
+.vscode/
+*.swp
