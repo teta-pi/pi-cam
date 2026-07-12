@@ -4,6 +4,7 @@ const KEY_API_KEY     = 'tetapi_api_key';
 const KEY_DEVICE_ID   = 'tetapi_device_id';
 const KEY_ENTITY_ID   = 'tetapi_entity_id';
 const KEY_ENTITY_NAME = 'tetapi_entity_name';
+const KEY_ENTITY_SLUG = 'tetapi_entity_slug';
 
 const API_BASE = 'https://api.tetapi.dev/api/v1';
 
@@ -11,6 +12,7 @@ export interface LinkedAccount {
   deviceId: string;
   entityId: string;
   entityName: string;
+  entitySlug: string | null;
   apiKey: string;
 }
 
@@ -22,6 +24,7 @@ export async function getLinkedAccount(): Promise<LinkedAccount | null> {
     deviceId:   (await SecureStore.getItemAsync(KEY_DEVICE_ID))   ?? '',
     entityId:   (await SecureStore.getItemAsync(KEY_ENTITY_ID))   ?? '',
     entityName: (await SecureStore.getItemAsync(KEY_ENTITY_NAME)) ?? '',
+    entitySlug: await SecureStore.getItemAsync(KEY_ENTITY_SLUG),
   };
 }
 
@@ -30,6 +33,7 @@ export async function unlinkAccount(): Promise<void> {
   await SecureStore.deleteItemAsync(KEY_DEVICE_ID);
   await SecureStore.deleteItemAsync(KEY_ENTITY_ID);
   await SecureStore.deleteItemAsync(KEY_ENTITY_NAME);
+  await SecureStore.deleteItemAsync(KEY_ENTITY_SLUG);
 }
 
 /**
@@ -73,18 +77,21 @@ export async function registerWithQR(
     api_key: string;
     entity_id: string;
     entity_name: string;
+    entity_slug: string | null;
   };
 
   await SecureStore.setItemAsync(KEY_API_KEY,     data.api_key);
   await SecureStore.setItemAsync(KEY_DEVICE_ID,   data.device_id);
   await SecureStore.setItemAsync(KEY_ENTITY_ID,   data.entity_id);
   await SecureStore.setItemAsync(KEY_ENTITY_NAME, data.entity_name);
+  if (data.entity_slug) await SecureStore.setItemAsync(KEY_ENTITY_SLUG, data.entity_slug);
 
   return {
     apiKey:     data.api_key,
     deviceId:   data.device_id,
     entityId:   data.entity_id,
     entityName: data.entity_name,
+    entitySlug: data.entity_slug ?? null,
   };
 }
 

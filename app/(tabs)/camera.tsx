@@ -398,7 +398,28 @@ export default function CameraScreen() {
         if (isOnline) {
           getLinkedAccount().then((acct) => {
             if (!acct) return;
-            uploadToTetaPi(stablePath!, 'image/jpeg', JSON.stringify(signed.manifest), new Date().toISOString()).catch(() => {});
+            // Re-sign with producerUrl so the manifest carries the TETA+PI profile link
+            const producerUrl = acct.entitySlug
+              ? `https://app.tetapi.dev/e/${acct.entitySlug}`
+              : undefined;
+            const manifestToUpload = producerUrl
+              ? { ...signed.manifest }
+              : signed.manifest;
+            if (producerUrl && !manifestToUpload.assertions.some((a) => a.label === 'c2pa.producer')) {
+              manifestToUpload.assertions = [
+                ...manifestToUpload.assertions,
+                {
+                  label: 'c2pa.producer',
+                  data: {
+                    '@context': 'https://schema.org',
+                    '@type': 'Organization',
+                    'schema:url': producerUrl,
+                    'schema:identifier': producerUrl,
+                  },
+                },
+              ];
+            }
+            uploadToTetaPi(stablePath!, 'image/jpeg', JSON.stringify(manifestToUpload), new Date().toISOString()).catch(() => {});
           }).catch(() => {});
         }
       } catch { /* signing failed — photo already saved */ }

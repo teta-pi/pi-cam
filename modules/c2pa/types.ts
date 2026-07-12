@@ -43,4 +43,5 @@ export interface CaptureMetadata {
   latitude?: number;
   longitude?: number;
   appVersion: string;
+  producerUrl?: string; // public TETA+PI profile URL, e.g. https://app.tetapi.dev/e/{slug}
 }

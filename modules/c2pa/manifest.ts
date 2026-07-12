@@ -61,6 +61,18 @@ export function buildManifest(
           },
         }]
       : []),
+    // Producer identity — links back to the public TETA+PI profile (GTM C2PA loop)
+    ...(meta.producerUrl
+      ? [{
+          label: 'c2pa.producer',
+          data: {
+            '@context': 'https://schema.org',
+            '@type': 'Organization',
+            'schema:url': meta.producerUrl,
+            'schema:identifier': meta.producerUrl,
+          },
+        }]
+      : []),
   ];
 
   const dateLabel = now.slice(0, 16).replace('T', ' '); // "2026-06-04 14:47"
