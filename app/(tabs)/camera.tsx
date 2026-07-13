@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/Icons';
 import { Image as RNImage } from 'react-native';
 import { signMedia, indexTrustedAsset } from '@/modules/c2pa';
+import type { C2PAManifest } from '@/modules/c2pa/types';
 import { getLinkedAccount, uploadMedia as uploadToTetaPi } from '@/modules/account';
 import { getPublicKey } from '@/modules/crypto';
 import { getCertInfo } from '@/modules/certificate';
@@ -271,6 +272,33 @@ export default function CameraScreen() {
     return `${m}:${sec}`;
   };
 
+  // Splice a c2pa.producer assertion (linking the public TETA+PI profile — GTM
+  // C2PA loop) onto a signed manifest, then upload. Shared by photo and video
+  // capture; no-ops silently if no account is linked or the entity has no slug
+  // yet (e.g. unpublished).
+  const attachProducerAndUpload = useCallback((fileUri: string, mimeType: string, manifest: C2PAManifest) => {
+    getLinkedAccount().then((acct) => {
+      if (!acct) return;
+      const producerUrl = acct.entitySlug ? `https://app.tetapi.dev/e/${acct.entitySlug}` : undefined;
+      const manifestToUpload = { ...manifest };
+      if (producerUrl && !manifestToUpload.assertions.some((a) => a.label === 'c2pa.producer')) {
+        manifestToUpload.assertions = [
+          ...manifestToUpload.assertions,
+          {
+            label: 'c2pa.producer',
+            data: {
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              'schema:url': producerUrl,
+              'schema:identifier': producerUrl,
+            },
+          },
+        ];
+      }
+      uploadToTetaPi(fileUri, mimeType, JSON.stringify(manifestToUpload), new Date().toISOString()).catch(() => {});
+    }).catch(() => {});
+  }, []);
+
   const runSigningToast = useCallback((online: boolean) => {
     setToast('signing');
     setTimeout(() => setToast('signed'), 700);
@@ -290,10 +318,38 @@ export default function CameraScreen() {
         setRecording(true);
         cameraRef.current?.recordAsync().then(async (result) => {
           setRecording(false);
-          if (result?.uri) {
-            runSigningToast(isOnline);
-            if (mediaPermission?.granted) await MediaLibrary.createAssetAsync(result.uri);
+          if (!result?.uri) return;
+          runSigningToast(isOnline);
+
+          let assetId: string | null = null;
+          if (mediaPermission?.granted) {
+            try {
+              const asset = await MediaLibrary.createAssetAsync(result.uri);
+              assetId = asset.id;
+            } catch {}
           }
+
+          // Sign + upload, same as photo capture — closes the proof-of-process
+          // use case (video verification), not just proof-of-creation.
+          try {
+            const ts = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '');
+            const signed = await signMedia(result.uri, {
+              filename: `PICAM_${ts}_${Platform.OS === 'ios' ? 'iOS' : 'Android'}.mp4`,
+              format: 'video/mp4',
+              device: Platform.OS === 'ios' ? 'iPhone' : 'Android',
+              gpsEnabled: coordsRef.current !== null,
+              latitude: coordsRef.current?.latitude,
+              longitude: coordsRef.current?.longitude,
+              appVersion: '1.0.0',
+            });
+
+            if (assetId) {
+              const trustLevel: 'ca' | 'device' = (isOnline && certActive) ? 'ca' : 'device';
+              await indexTrustedAsset(assetId, trustLevel, signed.contentHash);
+            }
+
+            if (isOnline) attachProducerAndUpload(result.uri, 'video/mp4', signed.manifest);
+          } catch { /* signing failed — video already saved to gallery */ }
         });
       }
       return;
@@ -395,33 +451,7 @@ export default function CameraScreen() {
         }
 
         // ── Step 4: Background upload to TETA+PI ─────────────────────────────
-        if (isOnline) {
-          getLinkedAccount().then((acct) => {
-            if (!acct) return;
-            // Re-sign with producerUrl so the manifest carries the TETA+PI profile link
-            const producerUrl = acct.entitySlug
-              ? `https://app.tetapi.dev/e/${acct.entitySlug}`
-              : undefined;
-            const manifestToUpload = producerUrl
-              ? { ...signed.manifest }
-              : signed.manifest;
-            if (producerUrl && !manifestToUpload.assertions.some((a) => a.label === 'c2pa.producer')) {
-              manifestToUpload.assertions = [
-                ...manifestToUpload.assertions,
-                {
-                  label: 'c2pa.producer',
-                  data: {
-                    '@context': 'https://schema.org',
-                    '@type': 'Organization',
-                    'schema:url': producerUrl,
-                    'schema:identifier': producerUrl,
-                  },
-                },
-              ];
-            }
-            uploadToTetaPi(stablePath!, 'image/jpeg', JSON.stringify(manifestToUpload), new Date().toISOString()).catch(() => {});
-          }).catch(() => {});
-        }
+        if (isOnline) attachProducerAndUpload(stablePath!, 'image/jpeg', signed.manifest);
       } catch { /* signing failed — photo already saved */ }
 
     } finally {
@@ -429,7 +459,7 @@ export default function CameraScreen() {
       if (markedPath) { try { new File(markedPath).delete(); } catch {} }
       isCapturing.current = false;
     }
-  }, [mode, recording, isOnline, mediaPermission, certActive, runSigningToast]);
+  }, [mode, recording, isOnline, mediaPermission, certActive, runSigningToast, attachProducerAndUpload]);
 
   if (!permission) return <View style={styles.container} />;
   if (!permission.granted) {

@@ -86,6 +86,57 @@ alert    #E74C3C   — помилка/підробка (червоний)
 - Всі нові фічі мають поважати офлайн обмеження
 - Маніфести зберігаються як JSON sidecar у `FileSystem.documentDirectory/manifests/`
 
+## Current state (2026-07-13)
+
+### Works
+- **Offline signing** (`modules/c2pa`, `modules/crypto`): every photo AND video
+  capture is hashed (SHA-256), signed with the device ECDSA key, and stored as
+  a JSON manifest sidecar under `documentDirectory/manifests/`. Verified via
+  `npx tsc --noEmit` — clean.
+- **QR-link handshake** (`modules/account`): scan QR from `app.tetapi.dev/profile`
+  → `POST /devices/register` on `api.tetapi.dev` → stores `api_key`,
+  `device_id`, `entity_id`, `entity_name`, **`entity_slug`** in SecureStore.
+  Confirmed live against prod: `generate-token` requires auth (401 without),
+  `register` rejects bad/expired tokens (400), `device-upload` rejects bad
+  device keys (401) — all match the coded contract exactly.
+- **C2PA → public profile link (GTM C2PA loop)**: once linked, every capture's
+  manifest gets a `c2pa.producer` assertion pointing at
+  `https://app.tetapi.dev/e/{entity_slug}` before `device-upload`. The backend
+  half of this (`entity_slug` threaded through `/devices/generate-token` →
+  `/devices/register`, platform repo PR #27) is merged and deployed — confirmed
+  by reading the live route code and hitting the prod endpoints above.
+- **Device-upload pipeline reuse**: no parallel pipeline — uploads go straight
+  through the existing `/media/device-upload` → C2PA verify/countersign → OTS
+  path on the platform API. No new server-side code was needed or added.
+
+### Fixed this session
+- **Video capture never signed or uploaded** (`app/(tabs)/camera.tsx`): the
+  video branch of `onShutter` only called `MediaLibrary.createAssetAsync` —
+  it never called `signMedia` or `uploadMedia`, so recorded video had no C2PA
+  manifest and never reached TETA+PI. This silently broke the
+  **proof-of-process** use case (video verification) while proof-of-creation
+  (photos) worked. Fixed to mirror the photo path: sign → index trust level →
+  (if online) upload with the `c2pa.producer` profile link. The shared
+  producer-splice-and-upload logic was factored into `attachProducerAndUpload`
+  to avoid duplicating it a third time.
+
+### Not verified (needs a human with the physical app + a real account)
+- **Full hardware round trip**: an agent has no camera, no Secure
+  Enclave/Keystore, and cannot log in as the owner (entering credentials is
+  off-limits). What's confirmed above is the code path and the live API
+  contract, not an actual scan → capture → upload → `/e/[slug]` → `GET /proof`
+  → MCP `teta_get_proof` run end-to-end on a device. **Next session (or the
+  owner) should**: open the app on a phone, link via QR from a real signed-in
+  `/profile`, capture a photo and a video, then check:
+  1. `GET https://api.tetapi.dev/api/v1/businesses/{id}/proof` shows a
+     `c2pa_proofs` entry for each capture,
+  2. `app.tetapi.dev/e/{slug}` shows the new block with a C2PA badge,
+  3. `mcp.tetapi.dev` → `teta_get_proof` returns the same chain to an agent.
+- **Three use-cases as user-facing framing** (proof-of-creation /
+  proof-of-process / copyright deposit) are a capability, not yet a UI choice
+  — nothing in the capture flow lets the user pick/label which one a given
+  shot is for. That's a product decision for a future session, not a bug.
+
 ## Phase 2 TODO
 - [ ] Hardware ECDSA P-256 через `react-native-quick-crypto` (Secure Enclave)
 - [ ] Watermark pixel-embed через `expo-image-manipulator`
