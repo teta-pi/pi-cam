@@ -12,19 +12,61 @@ C2PA/OpenTimestamps verification → publicly provable via
 
 ## Quick Start
 
+**⚠️ Expo Go will NOT run this app — see below before you scan the QR code.**
+
 ```bash
+# Node 20 LTS or newer (tested with v24.16.0)
+node --version
+
 # Install dependencies
-npm install   # or: bun install
+npm install
 
-# Start Expo dev server
+# Start the dev server
 npx expo start
-
-# iOS Simulator
-npx expo start --ios
-
-# Android Emulator
-npx expo start --android
 ```
+
+### Why Expo Go doesn't work
+
+This app uses **React Native Reanimated 4** (`react-native-reanimated` +
+`react-native-worklets`), which only supports the **New Architecture**. Expo
+Go's prebuilt client app does not correctly initialize the New Architecture
+for third-party projects using `react-native-worklets` yet — opening the app
+in Expo Go crashes immediately on launch with:
+
+```
+[Reanimated] Reanimated 4 supports only the React Native New Architecture and web.
+```
+
+This is a known, currently-unresolved upstream limitation
+([reanimated#8235](https://github.com/software-mansion/react-native-reanimated/issues/8235)),
+not a bug in this repo — `app.json` already has the New Architecture correctly
+enabled (`npx expo config --type introspect` confirms `RCTNewArchEnabled: true`
+for both platforms), and all dependency versions are aligned to the installed
+Expo SDK (`npx expo-doctor` → 18/18 checks pass).
+
+**You must run a custom dev client instead of Expo Go.** Two ways to get one:
+
+**A. Local build (needs full Xcode / Android Studio installed, not just the
+Command Line Tools):**
+```bash
+npx expo run:ios       # builds + launches in the iOS Simulator
+npx expo run:android   # builds + launches in an Android emulator/device
+```
+
+**B. Cloud build via EAS (no Xcode/Android Studio needed — needs a free Expo
+account):**
+```bash
+npm install -g eas-cli
+eas login
+eas build --profile development --platform ios      # or: --platform android
+```
+EAS gives you an install link (or QR code) when the build finishes — install
+that build on your phone like a TestFlight/internal build. Then:
+```bash
+npx expo start --dev-client
+```
+and open the project from **inside the installed dev-client app** (not Expo
+Go) — scan the QR it prints, or tap the dev server it shows in the launcher.
 
 ## Build for Physical Device
 
