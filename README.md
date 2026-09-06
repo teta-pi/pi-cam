@@ -52,6 +52,11 @@ Command Line Tools):**
 npx expo run:ios       # builds + launches in the iOS Simulator
 npx expo run:android   # builds + launches in an Android emulator/device
 ```
+⚠️ `npx expo run:android` needs unblocked network access to
+`dl.google.com` (Google's Maven/SDK CDN) — `react-native-reanimated`'s own
+Gradle buildscript pulls `com.android.tools.build:gradle:8.2.1` from there.
+See `docs/known-issues.md` #3 if the build fails at dependency resolution
+before it ever reaches the New Architecture code path above.
 
 **B. Cloud build via EAS (no Xcode/Android Studio needed — needs a free Expo
 account):**
