@@ -2,6 +2,61 @@
 
 Severity: 🔴 blocker · 🟠 important · 🟡 minor.
 
+## Android local build blocked by network access to Google's Maven repo — 2026-09-06 (session 14.4)
+
+Goal: build the app with `npx expo run:android` (a real native build, no
+EAS/Expo account) to sidestep the Expo Go / New Architecture crash
+documented in `README.md`, and confirm whether a local dev-client build
+actually works.
+
+### 🔴 3. `npx expo run:android` fails before it can even test the New Architecture issue — this sandbox cannot reach `dl.google.com`
+Environment setup all succeeded: `npx expo-doctor` → 17/18 (1 harmless patch
+version mismatch, `expo`/`expo-constants`/`expo-file-system`/`jest-expo`
+each one patch behind — unrelated to this issue), a full Android SDK was
+already present at `/usr/local/share/android-commandlinetools` (cmdline-tools,
+platform-tools, NDK 27.1.12297006, platforms 34/36, build-tools 36.0.0,
+emulator), a portable JDK 17 was installed user-locally (Homebrew's
+`temurin@17` cask needs `sudo`, which this session cannot supply — worked
+around with the plain Adoptium tarball extracted to `~/android-tools`), and
+the existing `PiCam_Test` AVD (Pixel 6, Android 14, `google_apis/x86_64`)
+booted and reached `sys.boot_completed=1` without issue.
+
+The actual Gradle build then failed — not with the reanimated/New
+Architecture runtime crash, but earlier, at dependency resolution:
+`react-native-reanimated`'s own `android/build.gradle` hardcodes
+`classpath "com.android.tools.build:gradle:8.2.1"` in its `buildscript`
+block, and Gradle could not fetch that (or several other
+`com.android.tools.*`-namespaced artifacts) because **`dl.google.com`
+returns a genuine 404 from Google's own infrastructure for every path
+tried** — `/android/repository/platform-tools-latest-darwin.zip`,
+`/android/maven2/...`, `/dl/android/maven2/...` — confirmed both via `curl`
+and via a real browser tab (Google's own "Error 404 (Not Found)!!1" page,
+`server: downloads` header). General internet access is fine (`google.com`,
+`github.com` return 200); only this specific Google CDN is unreachable from
+this sandbox's egress IP, almost certainly a datacenter-IP block on Google's
+side rather than a local proxy issue.
+
+**Diagnostic (not a fix, reverted after testing):** temporarily bumped the
+hardcoded `8.2.1` to a version already cached locally (`8.5.0`) to see how
+far the build would get. It failed at the same point, on the same class of
+Google-exclusive artifacts (`com.android.tools.build:builder-test-api`,
+`com.android.tools.layoutlib:layoutlib-api`, `androidx.databinding:*`,
+`com.android.tools.utp:*`, etc.) — Maven Central was searched too and
+correctly doesn't have them. This confirms the blocker is precisely and
+only `dl.google.com`'s CDN, not a broader dependency or code problem, and
+that the reanimated/New Architecture question from `README.md` was **not
+re-tested** this session — the build never got far enough to reach it.
+
+**What's needed:** either run this build from a machine/environment whose
+egress IP isn't blocked by Google's `dl.google.com` CDN, or pre-populate
+`~/.gradle/caches/modules-2` with the exact `com.android.tools.build:gradle`
+version `react-native-reanimated` requires (currently `8.2.1`) plus its full
+transitive graph from a machine that does have access, then retry offline.
+Status: **OPEN / BLOCKED on network access to Google's Maven repo.** Chain
+14.2 → 14.4 → 14.5 remains blocked, now for this reason rather than the
+previously-suspected reanimated bug (which is still separately unresolved
+upstream, just unconfirmed against a real local build).
+
 ## Live device QA — 2026-07-14 (session 14.2)
 
 Goal was a full-chain live QA pass (QR-link → capture → upload → public
