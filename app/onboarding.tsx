@@ -8,10 +8,8 @@ import { Colors, Radius } from '@/constants/tokens';
 import { useTheme } from '@/context/ThemeContext';
 import PiMark from '@/components/PiMark';
 import HashStream from '@/components/HashStream';
-import { LockIcon, CheckIcon, ShieldCheckIcon } from '@/components/ui/Icons';
+import { LockIcon, CheckIcon } from '@/components/ui/Icons';
 import { generateKeypair } from '@/modules/crypto';
-import { getPublicKeyPem } from '@/modules/crypto/keystore';
-import { requestCACertificate } from '@/modules/certificate';
 
 // ── Illustrations ─────────────────────────────────────────────────────────────
 
@@ -81,7 +79,7 @@ function GlobeIllo() {
 
 // ── Key Gen ───────────────────────────────────────────────────────────────────
 
-function KeyGenStep({ onDone }: { onDone: () => void }) {
+function KeyGenStep() {
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
   const [stageIdx, setStageIdx] = useState(0);
@@ -100,7 +98,7 @@ function KeyGenStep({ onDone }: { onDone: () => void }) {
 
     generateKeypair().catch(console.error);
 
-    const t3 = setTimeout(() => onDone(), 3500);
+    const t3 = setTimeout(() => router.replace('/(tabs)/camera'), 3500);
     return () => { clearInterval(interval); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, []);
 
@@ -136,78 +134,6 @@ function KeyGenStep({ onDone }: { onDone: () => void }) {
   );
 }
 
-// ── Cert Step ─────────────────────────────────────────────────────────────────
-
-function CertStep() {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-
-  const handleGetCert = async () => {
-    setStatus('loading');
-    try {
-      const pem = await getPublicKeyPem();
-      if (!pem) throw new Error('No key');
-      const ok = await requestCACertificate(pem);
-      setStatus(ok ? 'done' : 'error');
-      if (ok) setTimeout(() => router.replace('/(tabs)/camera'), 1500);
-    } catch {
-      setStatus('error');
-    }
-  };
-
-  return (
-    <View style={[styles.container, { backgroundColor: Colors.navy, alignItems: 'center', justifyContent: 'center', gap: 16 }]}>
-      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-        {[0, 1, 2].map((i) => (
-          <HashStream key={i} speed={18 + i * 3} color={Colors.verified} opacity={0.12} />
-        ))}
-      </View>
-
-      <View style={{
-        width: 80, height: 80, borderRadius: 40,
-        backgroundColor: status === 'done' ? Colors.verified : 'rgba(39,174,96,0.15)',
-        alignItems: 'center', justifyContent: 'center',
-      }}>
-        <ShieldCheckIcon size={44} color={status === 'done' ? '#fff' : Colors.verified} />
-      </View>
-
-      <Text style={styles.keyTitle}>
-        {status === 'idle' && 'Get Pi Certificate'}
-        {status === 'loading' && 'Connecting to Pi CA...'}
-        {status === 'done' && '🟢 Pi Verified!'}
-        {status === 'error' && 'Could not connect'}
-      </Text>
-
-      <Text style={[styles.keySub, { textAlign: 'center', paddingHorizontal: 32 }]}>
-        {status === 'idle' && 'Upgrade to Pi Verified — highest trust level. Free for all users.'}
-        {status === 'loading' && 'Verifying your device with Pi CA server...'}
-        {status === 'done' && 'All your photos will now be Pi Verified automatically.'}
-        {status === 'error' && 'Could not reach Pi CA server. You can upgrade in Settings anytime.'}
-      </Text>
-
-      {(status === 'idle' || status === 'error') && (
-        <>
-          {status === 'idle' && (
-            <Pressable
-              onPress={handleGetCert}
-              style={[styles.cta, { backgroundColor: Colors.verified, marginTop: 8, width: '80%' }]}
-            >
-              <Text style={styles.ctaText}>Get Pi Certificate 🟢</Text>
-            </Pressable>
-          )}
-          <Pressable
-            onPress={() => router.replace('/(tabs)/camera')}
-            style={{ padding: 12 }}
-          >
-            <Text style={{ color: Colors.purpleLt, fontSize: 14, fontWeight: '500' }}>
-              {status === 'error' ? 'Skip for now →' : 'Skip, use Device Only →'}
-            </Text>
-          </Pressable>
-        </>
-      )}
-    </View>
-  );
-}
-
 // ── Main Onboarding ───────────────────────────────────────────────────────────
 
 const SLIDES = [
@@ -223,7 +149,7 @@ const SLIDES = [
   },
   {
     title: 'Trusted worldwide.',
-    body: 'Online? We add a Pi Certificate Authority stamp — recognized by any C2PA-compatible tool.',
+    body: 'Link your camera to your public TETA+PI profile, so anyone can check who really captured a photo.',
     Illo: GlobeIllo,
   },
 ];
@@ -238,11 +164,7 @@ export default function OnboardingScreen() {
   };
 
   if (step === 3) {
-    return <KeyGenStep onDone={() => setStep(4)} />;
-  }
-
-  if (step === 4) {
-    return <CertStep />;
+    return <KeyGenStep />;
   }
 
   const slide = SLIDES[step];
