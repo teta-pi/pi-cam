@@ -5,7 +5,7 @@ import {
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { Colors, Radius } from '@/constants/tokens';
@@ -44,9 +44,15 @@ export default function GalleryScreen() {
   }, [permission]);
 
   useEffect(() => {
-    if (!permission?.granted) { requestPermission(); return; }
+    if (!permission?.granted) requestPermission();
+  }, [permission]);
+
+  // Re-read the library every time the Gallery tab gains focus — tabs stay
+  // mounted, so a photo taken on the Camera tab wouldn't otherwise appear
+  // until the app restarted.
+  useFocusEffect(useCallback(() => {
     loadPhotos();
-  }, [permission, loadPhotos]);
+  }, [loadPhotos]));
 
   const shareSelected = async () => {
     const ids = [...selected];
