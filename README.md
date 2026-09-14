@@ -1,5 +1,7 @@
 # Pi CAM
 
+[![CodeQL](https://github.com/teta-pi/pi-cam/actions/workflows/codeql.yml/badge.svg)](https://github.com/teta-pi/pi-cam/actions/workflows/codeql.yml) [![Dependency audit](https://github.com/teta-pi/pi-cam/actions/workflows/npm-audit.yml/badge.svg)](https://github.com/teta-pi/pi-cam/actions/workflows/npm-audit.yml)
+
 **Verified by Design** — C2PA-signed camera app for iOS & Android.
 
 Part of [TETA+PI](https://github.com/teta-pi/infra) — Trust Infrastructure
