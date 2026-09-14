@@ -30,7 +30,6 @@ import { signMedia, indexTrustedAsset } from '@/modules/c2pa';
 import type { C2PAManifest } from '@/modules/c2pa/types';
 import { getLinkedAccount, uploadMedia as uploadToTetaPi } from '@/modules/account';
 import { getPublicKey } from '@/modules/crypto';
-import { getCertInfo } from '@/modules/certificate';
 import WatermarkComposer, { WatermarkRef } from '@/components/WatermarkComposer';
 import { File, Directory, Paths } from 'expo-file-system';
 import * as Location from 'expo-location';
@@ -101,11 +100,10 @@ function HashFX({ active }: { active: boolean }) {
 
 // ── HUD Components ────────────────────────────────────────────────────────────
 
-function ClassicHUD({ online, certActive, flash, setFlash, openSettings, zoomLabel, onZoom }: {
-  online: boolean; certActive: boolean; flash: boolean; setFlash: (v: boolean) => void;
+function ClassicHUD({ online, flash, setFlash, openSettings, zoomLabel, onZoom }: {
+  online: boolean; flash: boolean; setFlash: (v: boolean) => void;
   openSettings: () => void; zoomLabel: string; onZoom: () => void;
 }) {
-  const verified = online && certActive;
   return (
     <>
       <View style={hud.topBar}>
@@ -114,8 +112,8 @@ function ClassicHUD({ online, certActive, flash, setFlash, openSettings, zoomLab
             ? <ZapIcon size={22} color={Colors.device} fill={Colors.device} />
             : <ZapOffIcon size={22} color="#fff" />}
         </CamControl>
-        <VerificationBadge status={verified ? 'ca' : 'device'} size="sm"
-          label={verified ? 'Pi Verified' : online ? 'Device Signed' : 'Offline'} />
+        <VerificationBadge status="device" size="sm"
+          label={online ? 'Device Signed' : 'Offline'} />
         <CamControl onPress={openSettings} label="Settings">
           <SettingsIcon size={20} color="#fff" />
         </CamControl>
@@ -136,7 +134,7 @@ function MinimalHUD({ online, flash, setFlash, openSettings }: {
         <View style={[hud.minimalPill, { borderColor: `${online ? Colors.verified : Colors.device}66` }]}>
           <PiMark size={22} color={Colors.purple} />
           <Text style={[hud.minimalStatus, { color: online ? '#7EE2A8' : '#FDD17A' }]}>
-            {'● ' + (online ? 'PI VERIFIED' : 'DEVICE ONLY')}
+            {'● ' + (online ? 'DEVICE SIGNED' : 'OFFLINE')}
           </Text>
         </View>
       </View>
@@ -178,7 +176,7 @@ function CinematicHUD({ online, flash, setFlash, openSettings, keyShort }: {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View style={[hud.dot, { backgroundColor: online ? Colors.verified : Colors.device }]} />
           <Text style={[hud.cinemaChip, { color: online ? '#7EE2A8' : '#FDD17A' }]}>
-            {online ? 'PI CA · READY' : 'OFFLINE · DEVICE ONLY'}
+            {online ? 'DEVICE SIGNED' : 'OFFLINE · DEVICE ONLY'}
           </Text>
         </View>
         <View style={{ flex: 1, marginHorizontal: 16, overflow: 'hidden' }}>
@@ -219,10 +217,9 @@ export default function CameraScreen() {
   const [keyShort, setKeyShort] = useState('····');
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const coordsRef = useRef<{ latitude: number; longitude: number } | null>(null);
-  const [certActive, setCertActive] = useState(false);
   const isCapturing = useRef(false);
   const [appSettings, setAppSettings] = useState<AppSettings>({
-    location: false, watermark: true, autoCa: true, savePhotos: true,
+    location: false, watermark: true, savePhotos: true,
   });
 
   const [hudVariant] = useState<HudVariant>('classic');
@@ -231,7 +228,6 @@ export default function CameraScreen() {
 
   React.useEffect(() => {
     getPublicKey().then((k) => { if (k) setKeyShort(k.publicKeyShort); });
-    getCertInfo().then((c) => setCertActive(c.status === 'active'));
   }, []);
 
   // Re-read settings every time the camera tab is focused
@@ -299,14 +295,10 @@ export default function CameraScreen() {
     }).catch(() => {});
   }, []);
 
-  const runSigningToast = useCallback((online: boolean) => {
+  const runSigningToast = useCallback(() => {
     setToast('signing');
     setTimeout(() => setToast('signed'), 700);
-    if (online) {
-      setTimeout(() => setToast('certifying'), 1700);
-      setTimeout(() => setToast('verified'), 3000);
-    }
-    setTimeout(() => setToast(null), 4500);
+    setTimeout(() => setToast(null), 2200);
   }, []);
 
   const onShutter = useCallback(async () => {
@@ -319,7 +311,7 @@ export default function CameraScreen() {
         cameraRef.current?.recordAsync().then(async (result) => {
           setRecording(false);
           if (!result?.uri) return;
-          runSigningToast(isOnline);
+          runSigningToast();
 
           let assetId: string | null = null;
           if (mediaPermission?.granted) {
@@ -344,8 +336,7 @@ export default function CameraScreen() {
             });
 
             if (assetId) {
-              const trustLevel: 'ca' | 'device' = (isOnline && certActive) ? 'ca' : 'device';
-              await indexTrustedAsset(assetId, trustLevel, signed.contentHash);
+              await indexTrustedAsset(assetId, signed.contentHash);
             }
 
             if (isOnline) attachProducerAndUpload(result.uri, 'video/mp4', signed.manifest);
@@ -360,7 +351,7 @@ export default function CameraScreen() {
 
     // Snapshot settings at capture time
     const settings = await readSettings().catch(() => ({
-      location: false, watermark: true, autoCa: true, savePhotos: true,
+      location: false, watermark: true, savePhotos: true,
     }));
 
     let stablePath: string | null = null;
@@ -379,7 +370,7 @@ export default function CameraScreen() {
       const photo = await cameraRef.current?.takePictureAsync({ quality: 1 });
       if (!photo?.uri) return;
 
-      runSigningToast(isOnline);
+      runSigningToast();
 
       // ── Copy to stable path ───────────────────────────────────────────────────
       const capturesDir = new Directory(Paths.document, 'captures');
@@ -446,8 +437,7 @@ export default function CameraScreen() {
         });
 
         if (assetId) {
-          const trustLevel: 'ca' | 'device' = (isOnline && certActive) ? 'ca' : 'device';
-          await indexTrustedAsset(assetId, trustLevel, signed.contentHash);
+          await indexTrustedAsset(assetId, signed.contentHash);
         }
 
         // ── Step 4: Background upload to TETA+PI ─────────────────────────────
@@ -459,7 +449,7 @@ export default function CameraScreen() {
       if (markedPath) { try { new File(markedPath).delete(); } catch {} }
       isCapturing.current = false;
     }
-  }, [mode, recording, isOnline, mediaPermission, certActive, runSigningToast, attachProducerAndUpload]);
+  }, [mode, recording, isOnline, mediaPermission, runSigningToast, attachProducerAndUpload]);
 
   if (!permission) return <View style={styles.container} />;
   if (!permission.granted) {
@@ -491,7 +481,7 @@ export default function CameraScreen() {
 
       {/* HUD */}
       {hudVariant === 'classic' && (
-        <ClassicHUD online={isOnline} certActive={certActive} flash={flash} setFlash={setFlash}
+        <ClassicHUD online={isOnline} flash={flash} setFlash={setFlash}
           openSettings={() => router.push('/(tabs)/settings')}
           zoomLabel={ZOOM_LABELS[zoomIdx >= 0 ? zoomIdx : 0]}
           onZoom={cycleZoom} />

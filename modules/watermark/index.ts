@@ -5,7 +5,7 @@
  */
 
 export type WatermarkOptions = {
-  trustLevel: 'ca' | 'device';
+  trustLevel: 'device';
   timestamp: string;
 };
 

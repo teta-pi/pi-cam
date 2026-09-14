@@ -15,11 +15,10 @@ import WatermarkComposer, { WatermarkRef } from '@/components/WatermarkComposer'
 import JsonTree from '@/components/JsonTree';
 import {
   CloseIcon, MoreIcon, ShareIcon, CalIcon, DeviceIcon, PinIcon,
-  KeyIcon, HashIcon, ClockIcon, AwardIcon, CopyIcon,
+  KeyIcon, HashIcon, ClockIcon, CopyIcon,
 } from '@/components/ui/Icons';
-import { loadTrustIndex, extractManifestByAssetId } from '@/modules/c2pa';
+import { extractManifestByAssetId } from '@/modules/c2pa';
 import { getPublicKey } from '@/modules/crypto';
-import { getCertInfo } from '@/modules/certificate';
 import type { C2PAManifest } from '@/modules/c2pa/types';
 
 type Tab = 'details' | 'technical';
@@ -56,7 +55,6 @@ export default function PreviewScreen() {
   const [tab, setTab] = useState<Tab>('details');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [resolvedUri, setResolvedUri] = useState(uri ?? '');
-  const [trustLevel, setTrustLevel] = useState<'ca' | 'device'>('device');
   const [manifest, setManifest] = useState<C2PAManifest | null>(null);
   const [assetInfo, setAssetInfo] = useState<MediaLibrary.AssetInfo | null>(null);
   const [keyShort, setKeyShort] = useState('····');
@@ -74,19 +72,9 @@ export default function PreviewScreen() {
       .catch(() => {});
   }, [uri, assetId]);
 
-  // Load trust level + manifest + cert
+  // Load manifest
   useEffect(() => {
     if (!assetId) return;
-    Promise.all([
-      loadTrustIndex(),
-      getCertInfo(),
-    ]).then(([index, certInfo]) => {
-      const stored = index[assetId];
-      // Upgrade to 'ca' if cert is active, regardless of what was stored at capture time
-      if (certInfo.status === 'active') setTrustLevel('ca');
-      else if (stored) setTrustLevel(stored);
-    }).catch(() => {});
-
     extractManifestByAssetId(assetId).then((result) => {
       if (result) setManifest(result.manifest);
     }).catch(() => {});
@@ -201,10 +189,7 @@ export default function PreviewScreen() {
           <View style={[StyleSheet.absoluteFill, { backgroundColor: '#1a1a2e' }]} />
         )}
         <View style={styles.badgeOverlay}>
-          <VerificationBadge
-            status={trustLevel}
-            label={trustLevel === 'ca' ? 'Pi Verified' : 'Device Signed'}
-          />
+          <VerificationBadge status="device" label="Device Signed" />
         </View>
       </View>
 
@@ -231,10 +216,7 @@ export default function PreviewScreen() {
             <DetailsRow Icon={DeviceIcon} label="SIGNED BY" value={deviceLabel as string} />
             <DetailsRow Icon={PinIcon} label="LOCATION" value={locationLabel} />
             <View style={{ padding: 16 }}>
-              <VerificationBadge
-                status={trustLevel}
-                label={trustLevel === 'ca' ? 'Pi Verified · L2 trust' : 'Device Signed · L1 trust'}
-              />
+              <VerificationBadge status="device" label="Device Signed" />
             </View>
             <DetailsRow
               Icon={KeyIcon} label="PUBLIC KEY" value={keyShort} mono copyable
@@ -248,9 +230,6 @@ export default function PreviewScreen() {
               Icon={ClockIcon} label="SIGNED AT"
               value={manifest?.signed_at ? new Date(manifest.signed_at).toISOString() : '—'} mono
             />
-            {manifest?.ca_certificate && (
-              <DetailsRow Icon={AwardIcon} label="CA CERTIFICATE" value="Pi CA · Active" />
-            )}
             <View style={{ height: 24 }} />
           </View>
         ) : (

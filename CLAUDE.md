@@ -57,7 +57,6 @@ modules/
   crypto/             Keypair генерація + Secure Store
   c2pa/               Офлайн C2PA маніфест + підпис + верифікація
   watermark/          (Phase 2) Badge overlay
-  certificate/        (Phase 2) Pi CA онлайн upgrade
 
 hooks/
   useDeviceKey        Lifecycle keypair (generate/check/reset)
@@ -68,15 +67,18 @@ hooks/
 ```
 navy     #1A1A2E   — фон темної теми
 purple   #6C63FF   — основний акцент
-verified #27AE60   — CA верифіковано (зелений)
+verified #27AE60   — позитивний статус (акаунт прив'язано тощо; зелений)
 device   #F5A623   — тільки пристрій (жовтий)
 alert    #E74C3C   — помилка/підробка (червоний)
 ```
 
 ## Trust рівні
+Один реальний рівень станом на 2026-09 — раніший "Pi Verified" (CA-підписаний)
+рівень був повністю симульованим (без реального CA-сервера) і прибраний
+(14.8/14.10 в `teta-pi/infra`'s roadmap.md).
+
 | Рівень | Колір | Опис |
 |--------|-------|------|
-| Pi Verified | 🟢 зелений | CA-підписаний + RFC 3161 timestamp |
 | Device Signed | 🟡 жовтий | ECDSA підпис від Secure Enclave |
 | Tampered | 🔴 червоний | Hash mismatch |
 
@@ -140,7 +142,9 @@ alert    #E74C3C   — помилка/підробка (червоний)
 ## Phase 2 TODO
 - [ ] Hardware ECDSA P-256 через `react-native-quick-crypto` (Secure Enclave)
 - [ ] Watermark pixel-embed через `expo-image-manipulator`
-- [ ] Pi CA server integration в `modules/certificate/index.ts`
+- [ ] Pi CA server integration — real CA service + client wiring, from
+      scratch (the earlier fake `modules/certificate` scaffold was removed
+      2026-09, 14.10, since it simulated a CA that never existed)
 - [ ] HUD variants: Minimal + Cinematic (switcher в Settings)
 - [ ] Ring + Stamp capture FX (Reanimated worklets)
 - [ ] `expo-av` для відео playback в Preview

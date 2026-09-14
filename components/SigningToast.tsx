@@ -3,10 +3,10 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withSpring,
 } from 'react-native-reanimated';
-import { ShieldCheckIcon, ShieldIcon, AlertIcon, SparkleIcon } from '@/components/ui/Icons';
+import { ShieldCheckIcon, AlertIcon } from '@/components/ui/Icons';
 import { Radius } from '@/constants/tokens';
 
-export type ToastPhase = 'signing' | 'signed' | 'certifying' | 'verified' | 'error';
+export type ToastPhase = 'signing' | 'signed' | 'error';
 
 type Config = {
   text: string;
@@ -15,10 +15,8 @@ type Config = {
 };
 
 const CONFIGS: Record<ToastPhase, Config> = {
-  signing:    { text: 'Signing…',              bg: 'rgba(26,26,46,0.92)', icon: null },
-  signed:     { text: 'Device Signed',         bg: 'rgba(26,26,46,0.92)', icon: null },
-  certifying: { text: 'Certifying…',           bg: 'rgba(26,26,46,0.92)', icon: null },
-  verified:   { text: 'Pi Verified ✓',         bg: 'rgba(6,95,70,0.92)',  icon: null },
+  signing:    { text: 'Signing…',               bg: 'rgba(26,26,46,0.92)', icon: null },
+  signed:     { text: 'Device Signed ✓',        bg: 'rgba(6,95,70,0.92)',  icon: null },
   error:      { text: 'Signing failed — Retry', bg: 'rgba(153,27,27,0.92)', icon: null },
 };
 
@@ -50,11 +48,9 @@ export default function SigningToast({ visible, phase }: Props) {
   const cfg = CONFIGS[phase];
 
   const IconEl = {
-    signing:    <ActivityIndicator size="small" color="#fff" style={{ width: 14, height: 14, transform: [{ scale: 0.7 }] }} />,
-    signed:     <ShieldCheckIcon size={14} color="#FCD34D" />,
-    certifying: <SparkleIcon size={14} color="#C7C3FF" />,
-    verified:   <ShieldCheckIcon size={14} color="#7EE2A8" />,
-    error:      <AlertIcon size={14} color="#FCA5A5" />,
+    signing: <ActivityIndicator size="small" color="#fff" style={{ width: 14, height: 14, transform: [{ scale: 0.7 }] }} />,
+    signed:  <ShieldCheckIcon size={14} color="#7EE2A8" />,
+    error:   <AlertIcon size={14} color="#FCA5A5" />,
   }[phase];
 
   return (

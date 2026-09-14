@@ -29,7 +29,7 @@ export interface SignedFile {
 }
 
 export interface VerifyResult {
-  status: 'ca' | 'device' | 'tampered' | 'none';
+  status: 'device' | 'tampered' | 'none';
   manifest: C2PAManifest | null;
   contentHash: string | null;
   message?: string;

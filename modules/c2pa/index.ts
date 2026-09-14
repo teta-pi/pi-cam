@@ -58,11 +58,7 @@ export async function verifyMedia(fileUri: string): Promise<VerifyResult> {
         (a: { label: string; data: { hash?: string } }) => a.label === 'c2pa.hash.data'
       );
       if (hashAssertion?.data?.hash === computedHash) {
-        return {
-          status: manifest.ca_certificate ? 'ca' : 'device',
-          manifest,
-          contentHash: computedHash,
-        };
+        return { status: 'device', manifest, contentHash: computedHash };
       }
       if (hashAssertion?.data?.hash && hashAssertion.data.hash !== computedHash) {
         return { status: 'tampered', manifest, contentHash: computedHash, message: 'Hash mismatch' };
@@ -75,7 +71,7 @@ export async function verifyMedia(fileUri: string): Promise<VerifyResult> {
   }
 }
 
-export async function indexTrustedAsset(assetId: string, level: 'ca' | 'device', contentHash: string) {
+export async function indexTrustedAsset(assetId: string, contentHash: string) {
   // Store assetId inside the manifest for future cross-session recovery
   const dir = ensureManifestDir();
   const manifestFile = new File(dir, `${contentHash.slice(0, 16)}.json`);
@@ -83,24 +79,27 @@ export async function indexTrustedAsset(assetId: string, level: 'ca' | 'device',
     try {
       const data = JSON.parse(await manifestFile.text());
       data.assetId = assetId;
-      data.trustLevel = level;
+      data.trustLevel = 'device';
       manifestFile.write(JSON.stringify(data));
     } catch {}
   }
 
   // Quick lookup index
   const indexFile = new File(Paths.document, 'pi_trust_index.json');
-  let index: Record<string, 'ca' | 'device'> = {};
+  let index: Record<string, 'device'> = {};
   if (indexFile.exists) {
     try { index = JSON.parse(await indexFile.text()); } catch {}
   }
-  index[assetId] = level;
+  index[assetId] = 'device';
   indexFile.write(JSON.stringify(index));
 }
 
-export async function loadTrustIndex(): Promise<Record<string, 'ca' | 'device'>> {
-  // Build from manifest files (handles cross-session photos)
-  const index: Record<string, 'ca' | 'device'> = {};
+export async function loadTrustIndex(): Promise<Record<string, 'device'>> {
+  // Build from manifest files (handles cross-session photos). Any legacy
+  // 'ca' value from before the fake-CA-certificate feature was removed is
+  // coerced down to 'device' — there was never a real CA, so nothing should
+  // ever render as CA-verified again.
+  const index: Record<string, 'device'> = {};
   try {
     const dir = manifestDir();
     if (dir.exists) {
@@ -109,7 +108,7 @@ export async function loadTrustIndex(): Promise<Record<string, 'ca' | 'device'>>
         try {
           const data = JSON.parse(await (item as File).text());
           if (data.assetId && data.trustLevel) {
-            index[data.assetId] = data.trustLevel;
+            index[data.assetId] = 'device';
           }
         } catch {}
       }));
@@ -120,8 +119,8 @@ export async function loadTrustIndex(): Promise<Record<string, 'ca' | 'device'>>
   try {
     const indexFile = new File(Paths.document, 'pi_trust_index.json');
     if (indexFile.exists) {
-      const quick = JSON.parse(await indexFile.text()) as Record<string, 'ca' | 'device'>;
-      Object.assign(index, quick);
+      const quick = JSON.parse(await indexFile.text()) as Record<string, string>;
+      for (const assetId of Object.keys(quick)) index[assetId] = 'device';
     }
   } catch {}
 

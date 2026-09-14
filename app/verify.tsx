@@ -7,14 +7,15 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { Colors, Radius } from '@/constants/tokens';
-import VerificationBadge from '@/components/VerificationBadge';
 import HashStream from '@/components/HashStream';
 import {
-  BackIcon, CloudUpIcon, ShieldCheckIcon, ShieldIcon, ShieldXIcon, AlertIcon,
-  CalIcon, DeviceIcon, AwardIcon, HashIcon, KeyIcon,
+  BackIcon, CloudUpIcon, ShieldIcon, ShieldXIcon, AlertIcon,
+  CalIcon, DeviceIcon, HashIcon, KeyIcon,
 } from '@/components/ui/Icons';
+import { verifyMedia } from '@/modules/c2pa';
+import type { C2PAManifest } from '@/modules/c2pa/types';
 
-type VerifyState = 'idle' | 'verifying' | 'ca' | 'device' | 'tampered' | 'none';
+type VerifyState = 'idle' | 'verifying' | 'device' | 'tampered' | 'none';
 
 function DropZone({ verifying, onPick }: { verifying: boolean; onPick: () => void }) {
   const t = useTheme();
@@ -49,17 +50,27 @@ type ResultCfg = {
   iconColor: string;
 };
 
-function ResultCard({ state, onReset }: { state: Exclude<VerifyState, 'idle' | 'verifying'>; onReset: () => void }) {
+type ResultState = Exclude<VerifyState, 'idle' | 'verifying'>;
+
+function ResultCard({ state, manifest, contentHash, onReset }: {
+  state: ResultState; manifest: C2PAManifest | null; contentHash: string | null; onReset: () => void;
+}) {
   const t = useTheme();
 
-  const cfgMap: Record<typeof state, ResultCfg> = {
-    ca:       { topColor: Colors.verified, header: 'Content Authentic',   Icon: ShieldCheckIcon, iconColor: Colors.verified },
-    device:   { topColor: Colors.device,   header: 'Device Verified',     Icon: ShieldIcon,      iconColor: Colors.device },
-    tampered: { topColor: Colors.alert,    header: 'Tampering Detected',  Icon: ShieldXIcon,     iconColor: Colors.alert },
-    none:     { topColor: Colors.alert,    header: 'No Verification Data', Icon: AlertIcon,       iconColor: Colors.alert },
+  const cfgMap: Record<ResultState, ResultCfg> = {
+    device:   { topColor: Colors.device, header: 'Device Signed',         Icon: ShieldIcon,  iconColor: Colors.device },
+    tampered: { topColor: Colors.alert,  header: 'Tampering Detected',    Icon: ShieldXIcon, iconColor: Colors.alert },
+    none:     { topColor: Colors.alert,  header: 'No Local Manifest',     Icon: AlertIcon,   iconColor: Colors.alert },
   };
   const cfg = cfgMap[state];
-  const skin = state === 'ca' ? t.badgeCa : state === 'device' ? t.badgeDevice : t.badgeError;
+  const skin = state === 'device' ? t.badgeDevice : t.badgeError;
+
+  const actionsAssertion = manifest?.assertions?.find((a) => a.label === 'c2pa.actions');
+  const actionsArr = Array.isArray(actionsAssertion?.data?.actions) ? actionsAssertion!.data.actions as Array<Record<string, unknown>> : [];
+  const deviceLabel = (actionsArr[0]?.softwareAgent as string | undefined) ?? 'Pi CAM';
+  const keyShort = manifest?.signature_info?.cert_serial_number ?? '—';
+  const hashShort = contentHash ? `${contentHash.slice(0, 8)}···${contentHash.slice(-8)}` : '—';
+  const capturedAt = manifest?.signed_at ? new Date(manifest.signed_at).toLocaleString() : '—';
 
   return (
     <View style={[styles.resultCard, { borderTopColor: cfg.topColor }]}>
@@ -68,33 +79,27 @@ function ResultCard({ state, onReset }: { state: Exclude<VerifyState, 'idle' | '
         <Text style={[styles.resultTitle, { color: skin.text }]}>{cfg.header}</Text>
       </View>
 
-      {state === 'ca' && (
-        <>
-          <ResultRow Icon={CalIcon} label="Captured" value="23 May 2026 17:44" t={t} />
-          <ResultRow Icon={DeviceIcon} label="Device" value="iPhone 16 Pro" t={t} />
-          <ResultRow Icon={AwardIcon} label="CA Certificate" value="Issued by Pi CA · valid" t={t} />
-          <ResultRow Icon={HashIcon} label="SHA-256" value="b271…d501 ✓" mono t={t} />
-        </>
-      )}
       {state === 'device' && (
         <>
-          <ResultRow Icon={DeviceIcon} label="Device" value="iPhone 16 Pro" t={t} />
-          <ResultRow Icon={KeyIcon} label="Public Key" value="A3F9…2B1C" mono t={t} />
-          <ResultRow Icon={HashIcon} label="SHA-256" value="8c1d…4e92 ✓" mono t={t} />
-          <ResultRow Icon={AwardIcon} label="CA Certificate" value="None — offline at capture" t={t} />
+          <ResultRow Icon={CalIcon} label="Captured" value={capturedAt} t={t} />
+          <ResultRow Icon={DeviceIcon} label="Signed By" value={deviceLabel} t={t} />
+          <ResultRow Icon={KeyIcon} label="Public Key" value={keyShort} mono t={t} />
+          <ResultRow Icon={HashIcon} label="SHA-256" value={hashShort} mono t={t} />
         </>
       )}
       {state === 'tampered' && (
-        <>
-          <ResultRow Icon={AlertIcon} label="Hash Mismatch" value="Image bytes were altered after signing." t={t} />
-          <ResultRow Icon={HashIcon} label="Expected" value="3e4f…a1b2" mono t={t} />
-          <ResultRow Icon={HashIcon} label="Computed" value="9c12…??ff" mono t={t} />
-        </>
+        <ResultRow
+          Icon={AlertIcon} label="Hash Mismatch"
+          value="File bytes don't match the signed manifest — content was altered after signing."
+          t={t}
+        />
       )}
       {state === 'none' && (
         <View style={{ padding: 20 }}>
           <Text style={{ color: t.textBody, fontSize: 14, lineHeight: 20 }}>
-            No C2PA manifest found in this file. Cannot establish provenance or authenticity.
+            No C2PA manifest found for this file on this device. Pi CAM can only
+            verify captures it signed itself — cross-device verification against
+            a remote registry isn't available yet.
           </Text>
         </View>
       )}
@@ -127,27 +132,41 @@ export default function VerifyScreen() {
   const insets = useSafeAreaInsets();
   const [state, setState] = useState<VerifyState>('idle');
   const [progress, setProgress] = useState(0);
+  const [fileMeta, setFileMeta] = useState<{ name: string; size: number | null } | null>(null);
+  const [manifest, setManifest] = useState<C2PAManifest | null>(null);
+  const [contentHash, setContentHash] = useState<string | null>(null);
 
-  const trigger = (target: Exclude<VerifyState, 'idle' | 'verifying'>) => {
-    setState('verifying');
-    setProgress(0);
-    const iv = setInterval(() => setProgress((p) => Math.min(100, p + 8)), 60);
-    setTimeout(() => { clearInterval(iv); setState(target); setProgress(100); }, 1400);
+  const reset = () => {
+    setState('idle');
+    setFileMeta(null);
+    setManifest(null);
+    setContentHash(null);
   };
 
   const pickFile = async () => {
     const result = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'video/*'] });
-    if (!result.canceled && result.assets[0]) {
-      trigger('ca');
+    if (result.canceled || !result.assets[0]) return;
+
+    setState('verifying');
+    setProgress(0);
+    setFileMeta({ name: result.assets[0].name, size: result.assets[0].size ?? null });
+
+    const iv = setInterval(() => setProgress((p) => Math.min(92, p + 8)), 60);
+    try {
+      const verifyResult = await verifyMedia(result.assets[0].uri);
+      clearInterval(iv);
+      setProgress(100);
+      setManifest(verifyResult.manifest);
+      setContentHash(verifyResult.contentHash);
+      setState(verifyResult.status);
+    } catch {
+      clearInterval(iv);
+      setProgress(100);
+      setState('none');
     }
   };
 
-  const SAMPLES: { label: string; color: string; target: Exclude<VerifyState, 'idle' | 'verifying'> }[] = [
-    { label: '✓ Pi Verified',  color: Colors.verified, target: 'ca' },
-    { label: '● Device Only',  color: Colors.device,   target: 'device' },
-    { label: '✕ Tampered',     color: Colors.alert,    target: 'tampered' },
-    { label: '?  No manifest', color: t.grayMid,       target: 'none' },
-  ];
+  const fileSizeLabel = fileMeta?.size ? `${(fileMeta.size / (1024 * 1024)).toFixed(1)} MB` : '—';
 
   return (
     <View style={[styles.container, { backgroundColor: t.bg }]}>
@@ -165,12 +184,12 @@ export default function VerifyScreen() {
           <DropZone verifying={state === 'verifying'} onPick={pickFile} />
         )}
 
-        {state === 'verifying' && (
+        {state === 'verifying' && fileMeta && (
           <View style={[styles.fileCard, { backgroundColor: t.bgAlt }]}>
             <View style={[styles.fileThumb, { backgroundColor: Colors.navy }]} />
             <View style={{ flex: 1 }}>
-              <Text style={[styles.fileName, { color: t.text }]}>IMG_3892.heic</Text>
-              <Text style={[styles.fileSize, { color: t.textMuted }]}>4.2 MB</Text>
+              <Text style={[styles.fileName, { color: t.text }]} numberOfLines={1}>{fileMeta.name}</Text>
+              <Text style={[styles.fileSize, { color: t.textMuted }]}>{fileSizeLabel}</Text>
               <View style={[styles.progressTrack, { backgroundColor: t.lavender }]}>
                 <View style={[styles.progressFill, { width: `${progress}%` as any, backgroundColor: t.purple }]} />
               </View>
@@ -179,22 +198,8 @@ export default function VerifyScreen() {
           </View>
         )}
 
-        {['ca', 'device', 'tampered', 'none'].includes(state) && (
-          <ResultCard state={state as Exclude<VerifyState, 'idle' | 'verifying'>} onReset={() => setState('idle')} />
-        )}
-
-        {state === 'idle' && (
-          <View style={styles.samples}>
-            <Text style={[styles.sampleLabel, { color: t.textMuted }]}>TRY A SAMPLE</Text>
-            <View style={styles.sampleGrid}>
-              {SAMPLES.map((s) => (
-                <Pressable key={s.target} onPress={() => trigger(s.target)}
-                  style={[styles.sampleChip, { backgroundColor: t.bgAlt, borderColor: t.borderSoft }]}>
-                  <Text style={{ color: s.color, fontSize: 13, fontWeight: '600' }}>{s.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
+        {(state === 'device' || state === 'tampered' || state === 'none') && (
+          <ResultCard state={state} manifest={manifest} contentHash={contentHash} onReset={reset} />
         )}
       </ScrollView>
     </View>
@@ -242,13 +247,4 @@ const styles = StyleSheet.create({
     height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderBottomWidth: 0.5, gap: 4,
   },
   resetBtn: { padding: 12, alignItems: 'center' },
-  samples: { marginTop: 8 },
-  sampleLabel: {
-    fontSize: 11, fontWeight: '600', letterSpacing: 0.6, marginBottom: 8,
-  },
-  sampleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  sampleChip: {
-    width: '48%', height: 44, borderRadius: 12, borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
-  },
 });

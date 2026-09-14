@@ -8,11 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { Colors, Radius } from '@/constants/tokens';
 import { useDeviceKey } from '@/hooks/useDeviceKey';
-import { useNetworkStatus } from '@/hooks/useNetworkStatus';
-import { getCertInfo, requestCACertificate, type CertInfo } from '@/modules/certificate';
-import VerificationBadge from '@/components/VerificationBadge';
 import {
-  UserIcon, KeyIcon, ShieldIcon, AlertIcon, PinIcon, DropletIcon, SparkleIcon,
+  UserIcon, KeyIcon, AlertIcon, PinIcon, DropletIcon,
   DownloadIcon, ShieldCheckIcon, FileJsonIcon, InfoIcon, FileIcon, ChevRightIcon,
   CopyIcon, LinkIcon,
 } from '@/components/ui/Icons';
@@ -117,30 +114,15 @@ function ResetSheet({ visible, onClose, onConfirm }: { visible: boolean; onClose
 export default function SettingsScreen() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const isOnline = useNetworkStatus();
   const { state: keyState, reset: resetKey } = useDeviceKey();
 
   const [resetOpen, setResetOpen] = useState(false);
-  const [certInfo, setCertInfo] = useState<CertInfo>({ status: 'none' });
-  const [certLoading, setCertLoading] = useState(false);
   const [linkedAccount, setLinkedAccount] = useState<LinkedAccount | null>(null);
   const { settings: toggles, flip } = useSettings();
 
   useEffect(() => {
-    getCertInfo().then(setCertInfo);
     getLinkedAccount().then(setLinkedAccount);
   }, []);
-
-  const handleGetCert = async () => {
-    if (certLoading || keyState.status !== 'ready') return;
-    setCertLoading(true);
-    try {
-      const ok = await requestCACertificate(keyState.keyInfo.publicKeyPem);
-      if (ok) setCertInfo(await getCertInfo());
-    } finally {
-      setCertLoading(false);
-    }
-  };
 
   const keyShort = keyState.status === 'ready' ? keyState.keyInfo.publicKeyShort : '····';
 
@@ -197,23 +179,6 @@ export default function SettingsScreen() {
           }
         />
         <Row
-          Icon={ShieldIcon}
-          label="Trust Level"
-          value={<VerificationBadge status={isOnline ? 'ca' : 'device'} size="sm" label={isOnline ? 'Pi Verified' : 'Device Only'} />}
-        />
-        <Row
-          Icon={ShieldCheckIcon}
-          label="Pi Certificate"
-          value={
-            certInfo.status === 'active'
-              ? <VerificationBadge status="ca" size="sm" label="Active" />
-              : certInfo.status === 'expired'
-              ? <VerificationBadge status="error" size="sm" label="Expired" />
-              : <VerificationBadge status="device" size="sm" label="Not installed" />
-          }
-          onPress={certInfo.status === 'active' ? undefined : handleGetCert}
-        />
-        <Row
           Icon={AlertIcon}
           label="Reset Device Key"
           danger
@@ -221,32 +186,9 @@ export default function SettingsScreen() {
         />
       </Section>
 
-      {certInfo.status !== 'active' && (
-        <Pressable
-          onPress={handleGetCert}
-          style={{
-            marginHorizontal: 16, marginTop: 4, marginBottom: 8,
-            backgroundColor: 'rgba(39,174,96,0.1)',
-            borderRadius: 12, padding: 12,
-            flexDirection: 'row', alignItems: 'center', gap: 10,
-          }}
-        >
-          <ShieldCheckIcon size={20} color={Colors.verified} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: Colors.verified, fontWeight: '600', fontSize: 13 }}>
-              {certLoading ? 'Connecting to Pi CA...' : 'Upgrade to Pi Verified — Free'}
-            </Text>
-            <Text style={{ color: Colors.verified, fontSize: 12, opacity: 0.7, marginTop: 2 }}>
-              {certInfo.status === 'expired' ? 'Your certificate expired — tap to renew' : 'Tap to get your Pi Certificate'}
-            </Text>
-          </View>
-        </Pressable>
-      )}
-
       <Section label="CAPTURE">
         <ToggleRow Icon={PinIcon} label="Include Location" sub="GPS in manifest" value={toggles.location} onChange={() => flip('location')} />
         <ToggleRow Icon={DropletIcon} label="Watermark on Share" sub="Pi badge on shared images" value={toggles.watermark} onChange={() => flip('watermark')} />
-        <ToggleRow Icon={SparkleIcon} label="Auto CA Upgrade" sub="Re-certify when online" value={toggles.autoCa} onChange={() => flip('autoCa')} />
         <ToggleRow Icon={DownloadIcon} label="Save to Photos" sub="Auto-save to camera roll" value={toggles.savePhotos} onChange={() => flip('savePhotos')} />
       </Section>
 

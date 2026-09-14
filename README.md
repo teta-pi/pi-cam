@@ -99,9 +99,9 @@ app/            Expo Router screens (file-based navigation)
   manifest      Modal: C2PA manifest JSON viewer
 
 components/     Shared UI (pixel-perfect per design handoff)
-  VerificationBadge  5 states × 2 sizes
+  VerificationBadge  3 states × 2 sizes
   ShutterButton      photo/video/recording modes
-  SigningToast       4-phase animated status
+  SigningToast       Signing/signed/error status
   PiMark             Shield + π SVG logo
   HashStream         Cinematic hex ticker
   JsonTree           Collapsible C2PA manifest viewer
@@ -110,7 +110,6 @@ modules/
   crypto/       Keypair generation + Secure Enclave / Keystore storage
   c2pa/         Offline C2PA manifest build + sign + verify
   watermark/    Badge overlay on shared copies (Phase 2)
-  certificate/  Online Pi CA upgrade (Phase 2)
 
 hooks/
   useDeviceKey      Keypair lifecycle (generate / check / reset)
@@ -121,9 +120,15 @@ hooks/
 
 | Level | Indicator | Description |
 |-------|-----------|-------------|
-| 🟢 Pi Verified | CA-signed | Pi CA server stamp + RFC 3161 timestamp |
 | 🟡 Device Signed | Device-only | ECDSA signature from device Secure Enclave |
 | 🔴 Tampered | Error | Hash mismatch detected |
+
+There is currently only one real trust level. An earlier "Pi Verified"
+(CA-signed) tier existed in the UI as a fully simulated feature — no CA
+server was ever built — and was removed (see the `teta-pi/infra` repo's
+`docs/known-issues.md` and `docs/roadmap.md` 14.8/14.10 entries for the
+removal history). A real CA-backed tier may return once `ca.picam.app`
+exists for real.
 
 ## Offline-First
 
