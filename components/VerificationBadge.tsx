@@ -2,9 +2,9 @@ import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useTheme } from '@/context/ThemeContext';
 import { Radius } from '@/constants/tokens';
-import { ShieldCheckIcon, ShieldIcon, ShieldXIcon, SparkleIcon } from '@/components/ui/Icons';
+import { ShieldIcon, ShieldXIcon } from '@/components/ui/Icons';
 
-export type BadgeStatus = 'ca' | 'device' | 'error' | 'signing' | 'certifying';
+export type BadgeStatus = 'device' | 'error' | 'signing';
 
 type Props = {
   status?: BadgeStatus;
@@ -13,21 +13,17 @@ type Props = {
 };
 
 const LABELS: Record<BadgeStatus, string> = {
-  ca: 'Pi Verified',
   device: 'Device Signed',
   error: 'Verification failed',
   signing: 'Signing…',
-  certifying: 'Certifying…',
 };
 
-export default function VerificationBadge({ status = 'ca', size = 'md', label }: Props) {
+export default function VerificationBadge({ status = 'device', size = 'md', label }: Props) {
   const t = useTheme();
-  const BADGE_KEYS: Record<BadgeStatus, 'badgeCa' | 'badgeDevice' | 'badgeError' | 'badgeSign'> = {
-    ca: 'badgeCa',
+  const BADGE_KEYS: Record<BadgeStatus, 'badgeDevice' | 'badgeError' | 'badgeSign'> = {
     device: 'badgeDevice',
     error: 'badgeError',
     signing: 'badgeSign',
-    certifying: 'badgeSign',
   };
   const skin = t[BADGE_KEYS[status]];
 
@@ -36,11 +32,9 @@ export default function VerificationBadge({ status = 'ca', size = 'md', label }:
   const iconSize = compact ? 12 : 14;
 
   const Icon = {
-    ca: ShieldCheckIcon,
     device: ShieldIcon,
     error: ShieldXIcon,
     signing: ShieldIcon,
-    certifying: SparkleIcon,
   }[status];
 
   return (

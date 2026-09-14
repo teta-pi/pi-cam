@@ -4,11 +4,10 @@ import { File, Paths } from 'expo-file-system';
 export type AppSettings = {
   location: boolean;
   watermark: boolean;
-  autoCa: boolean;
   savePhotos: boolean;
 };
 
-const DEFAULTS: AppSettings = { location: false, watermark: true, autoCa: true, savePhotos: true };
+const DEFAULTS: AppSettings = { location: false, watermark: true, savePhotos: true };
 const SETTINGS_FILE = 'pi_settings.json';
 
 function getFile() {

@@ -9,14 +9,14 @@ import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/context/ThemeContext';
 import { Colors, Radius } from '@/constants/tokens';
-import { PlusIcon, ShieldCheckIcon, ShieldIcon, CameraIcon, CheckIcon } from '@/components/ui/Icons';
+import { PlusIcon, ShieldIcon, CameraIcon, CheckIcon } from '@/components/ui/Icons';
 import { loadTrustIndex } from '@/modules/c2pa';
 
 const W = Dimensions.get('window').width;
 const CELL = (W - 4) / 3;
 
-type PhotoItem = MediaLibrary.Asset & { trustLevel?: 'ca' | 'device' };
-type Filter = 'all' | 'device' | 'ca';
+type PhotoItem = MediaLibrary.Asset & { trustLevel?: 'device' };
+type Filter = 'all' | 'device';
 
 export default function GalleryScreen() {
   const t = useTheme();
@@ -79,8 +79,7 @@ export default function GalleryScreen() {
 
   const FILTERS: { id: Filter; label: string; dot?: string }[] = [
     { id: 'all', label: `All · ${photos.length}` },
-    { id: 'device', label: 'Device', dot: Colors.device },
-    { id: 'ca', label: 'Pi Verified', dot: Colors.verified },
+    { id: 'device', label: 'Device Signed', dot: Colors.device },
   ];
 
   if (!permission?.granted) {
@@ -153,10 +152,8 @@ export default function GalleryScreen() {
                 />
                 {/* Trust pip — only for Pi CAM signed photos */}
                 {item.trustLevel && (
-                  <View style={[styles.pip, { backgroundColor: item.trustLevel === 'ca' ? Colors.verified : Colors.device }]}>
-                    {item.trustLevel === 'ca'
-                      ? <ShieldCheckIcon size={12} color="#fff" stroke={2.6} />
-                      : <ShieldIcon size={12} color="#fff" stroke={2.6} />}
+                  <View style={[styles.pip, { backgroundColor: Colors.device }]}>
+                    <ShieldIcon size={12} color="#fff" stroke={2.6} />
                   </View>
                 )}
                 {/* Selection circle */}
