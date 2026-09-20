@@ -154,7 +154,25 @@ export default function SettingsScreen() {
               danger
               onPress={() => Alert.alert('Unlink?', 'Camera will no longer upload to TETA+PI.', [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Unlink', style: 'destructive', onPress: async () => { await unlinkAccount(); setLinkedAccount(null); } },
+                {
+                  text: 'Unlink',
+                  style: 'destructive',
+                  onPress: async () => {
+                    // 14.11: revokes the key on the server before wiping it
+                    // locally. If the server couldn't be reached, say so —
+                    // the key may still be live until revoked from the profile.
+                    const result = await unlinkAccount();
+                    setLinkedAccount(null);
+                    if (!result.revokedOnServer) {
+                      Alert.alert(
+                        'Key revoked on this phone only',
+                        `Could not reach TETA+PI (${result.reason ?? 'unknown'}). ` +
+                        'Also revoke this camera from your profile on app.tetapi.dev, ' +
+                        'otherwise its key stays valid on the server.',
+                      );
+                    }
+                  },
+                },
               ])}
             />
           </>
