@@ -28,12 +28,54 @@ export async function getLinkedAccount(): Promise<LinkedAccount | null> {
   };
 }
 
-export async function unlinkAccount(): Promise<void> {
+export interface UnlinkResult {
+  /** true = the server confirmed the device key is dead (revoked now, or was
+   *  already invalid). false = only the local copy was wiped — the key may
+   *  still be live on the server and must be revoked from the profile. */
+  revokedOnServer: boolean;
+  reason?: string;
+}
+
+/**
+ * Unlink = revoke on the server FIRST, then wipe local keys (14.11 / api 1.25).
+ *
+ * Before 14.11 this only cleared SecureStore, so the device key stayed valid
+ * forever on the server (known-issues 6.6b). `POST /devices/self-revoke` is
+ * authenticated by the device key itself, so it can only ever kill this
+ * device. Local wipe always happens — a phone must be able to unlink while
+ * offline — but the caller gets an honest result so the UI never claims
+ * "revoked" when it wasn't (see the 14.8/14.10/6.7 fake-"done" history).
+ */
+export async function unlinkAccount(): Promise<UnlinkResult> {
+  const apiKey = await SecureStore.getItemAsync(KEY_API_KEY);
+  let result: UnlinkResult;
+
+  if (!apiKey) {
+    result = { revokedOnServer: false, reason: 'No device key stored on this phone' };
+  } else {
+    try {
+      const res = await fetch(`${API_BASE}/devices/self-revoke`, {
+        method: 'POST',
+        headers: { 'X-Device-Api-Key': apiKey },
+      });
+      if (res.ok || res.status === 401) {
+        // 401 = the server no longer knows this key (already revoked from the
+        // profile / by support) — either way it cannot upload anymore.
+        result = { revokedOnServer: true };
+      } else {
+        result = { revokedOnServer: false, reason: `Server error ${res.status}` };
+      }
+    } catch (e) {
+      result = { revokedOnServer: false, reason: e instanceof Error ? e.message : 'Network error' };
+    }
+  }
+
   await SecureStore.deleteItemAsync(KEY_API_KEY);
   await SecureStore.deleteItemAsync(KEY_DEVICE_ID);
   await SecureStore.deleteItemAsync(KEY_ENTITY_ID);
   await SecureStore.deleteItemAsync(KEY_ENTITY_NAME);
   await SecureStore.deleteItemAsync(KEY_ENTITY_SLUG);
+  return result;
 }
 
 /**
