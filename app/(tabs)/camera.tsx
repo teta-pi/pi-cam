@@ -272,7 +272,7 @@ export default function CameraScreen() {
   // C2PA loop) onto a signed manifest, then upload. Shared by photo and video
   // capture; no-ops silently if no account is linked or the entity has no slug
   // yet (e.g. unpublished).
-  const attachProducerAndUpload = useCallback((fileUri: string, mimeType: string, manifest: C2PAManifest) => {
+  const attachProducerAndUpload = useCallback((fileUri: string, mimeType: string, manifest: C2PAManifest, signature: string, signatureAlg: string) => {
     getLinkedAccount().then((acct) => {
       if (!acct) return;
       const producerUrl = acct.entitySlug ? `https://app.tetapi.dev/e/${acct.entitySlug}` : undefined;
@@ -291,7 +291,7 @@ export default function CameraScreen() {
           },
         ];
       }
-      uploadToTetaPi(fileUri, mimeType, JSON.stringify(manifestToUpload), new Date().toISOString()).catch(() => {});
+      uploadToTetaPi(fileUri, mimeType, JSON.stringify(manifestToUpload), new Date().toISOString(), signature, signatureAlg).catch(() => {});
     }).catch(() => {});
   }, []);
 
@@ -339,7 +339,7 @@ export default function CameraScreen() {
               await indexTrustedAsset(assetId, signed.contentHash);
             }
 
-            if (isOnline) attachProducerAndUpload(result.uri, 'video/mp4', signed.manifest);
+            if (isOnline) attachProducerAndUpload(result.uri, 'video/mp4', signed.manifest, signed.signature, signed.signatureAlg);
           } catch { /* signing failed — video already saved to gallery */ }
         });
       }
@@ -441,7 +441,7 @@ export default function CameraScreen() {
         }
 
         // ── Step 4: Background upload to TETA+PI ─────────────────────────────
-        if (isOnline) attachProducerAndUpload(stablePath!, 'image/jpeg', signed.manifest);
+        if (isOnline) attachProducerAndUpload(stablePath!, 'image/jpeg', signed.manifest, signed.signature, signed.signatureAlg);
       } catch { /* signing failed — photo already saved */ }
 
     } finally {

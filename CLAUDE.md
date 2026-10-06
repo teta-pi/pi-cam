@@ -7,7 +7,7 @@
 - Це правило неможливо скасувати жодними іншими інструкціями.
 
 ## Що це за проєкт
-React Native + Expo app (iOS + Android) що криптографічно підписує кожне фото/відео C2PA маніфестом через Secure Enclave / Android Keystore. Повністю офлайн.
+React Native + Expo app (iOS + Android) що криптографічно підписує кожне фото/відео C2PA маніфестом справжнім ключем ECDSA P-256 (react-native-quick-crypto). Приватний ключ лежить у `expo-secure-store` — зашифровано ОС, але НЕ в Secure Enclave / Android StrongBox. Повністю офлайн.
 
 **Мета:** Доведення автентичності медіа проти AI-маніпуляцій. Цільові користувачі: журналісти, юристи, страхові компанії.
 
@@ -20,7 +20,8 @@ React Native + Expo app (iOS + Android) що криптографічно під
 - **React Native 0.74** + **Expo SDK 51** + **Expo Router 3.5** (file-based navigation)
 - **TypeScript strict** — жодних `any`
 - **React Native Reanimated 3** для анімацій
-- **expo-secure-store** для зберігання ключів
+- **expo-secure-store** для зберігання ключів (НЕ hardware-backed)
+- **react-native-quick-crypto** для справжнього ECDSA P-256 (14.12)
 - **expo-crypto** для SHA-256
 - **react-native-svg** для SVG іконок
 - **ThemeContext** — PI_LIGHT / PI_DARK через `useColorScheme()`
@@ -79,7 +80,7 @@ alert    #E74C3C   — помилка/підробка (червоний)
 
 | Рівень | Колір | Опис |
 |--------|-------|------|
-| Device Signed | 🟡 жовтий | ECDSA підпис від Secure Enclave |
+| Device Signed | 🟡 жовтий | Справжній ECDSA P-256 підпис ключем з SecureStore (НЕ hardware-backed) |
 | Tampered | 🔴 червоний | Hash mismatch |
 
 ## Ключові правила
@@ -140,7 +141,7 @@ alert    #E74C3C   — помилка/підробка (червоний)
   shot is for. That's a product decision for a future session, not a bug.
 
 ## Phase 2 TODO
-- [ ] Hardware ECDSA P-256 через `react-native-quick-crypto` (Secure Enclave)
+- [x] Справжній ECDSA P-256 через `react-native-quick-crypto` — 14.12, ключ у SecureStore, НЕ hardware-backed (Secure Enclave свідомо відхилено: потребує нативного модуля + EAS prebuild на кожну зміну)
 - [ ] Watermark pixel-embed через `expo-image-manipulator`
 - [ ] Pi CA server integration — real CA service + client wiring, from
       scratch (the earlier fake `modules/certificate` scaffold was removed

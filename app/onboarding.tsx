@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, Pressable, Animated,
 } from 'react-native';
 import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Colors, Radius } from '@/constants/tokens';
 import { useTheme } from '@/context/ThemeContext';
 import PiMark from '@/components/PiMark';
@@ -79,7 +79,7 @@ function GlobeIllo() {
 
 // ── Key Gen ───────────────────────────────────────────────────────────────────
 
-function KeyGenStep() {
+function KeyGenStep({ migrated }: { migrated: boolean }) {
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
   const [stageIdx, setStageIdx] = useState(0);
@@ -128,7 +128,11 @@ function KeyGenStep() {
       <Text style={styles.keyTitle}>
         {done ? 'Your key is ready' : 'Generating your secure key'}
       </Text>
-      <Text style={styles.keySub}>Your private key never leaves this device.</Text>
+      <Text style={styles.keySub}>
+        {migrated
+          ? 'We upgraded your device to a real ECDSA key — your old one was never valid. Re-link your account in Settings.'
+          : 'Your private key never leaves this device.'}
+      </Text>
       <Text style={styles.keyStage}>{stages[stageIdx]}</Text>
     </View>
   );
@@ -156,7 +160,9 @@ const SLIDES = [
 
 export default function OnboardingScreen() {
   const t = useTheme();
-  const [step, setStep] = useState(0);
+  const { migrated } = useLocalSearchParams<{ migrated?: string }>();
+  const isMigration = migrated === '1';
+  const [step, setStep] = useState(isMigration ? 3 : 0);
 
   const goNext = () => {
     if (step < 2) setStep((s) => s + 1);
@@ -164,7 +170,7 @@ export default function OnboardingScreen() {
   };
 
   if (step === 3) {
-    return <KeyGenStep />;
+    return <KeyGenStep migrated={isMigration} />;
   }
 
   const slide = SLIDES[step];
