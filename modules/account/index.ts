@@ -16,6 +16,22 @@ export interface LinkedAccount {
   apiKey: string;
 }
 
+/**
+ * Wipe the local account link without calling the server (14.12 key
+ * migration). Used only when a device's key is being regenerated because
+ * its old key was never a real one (see modules/crypto's legacy-format
+ * check) — any `api_key` issued for that fake key was never a valid
+ * registration either, so there is nothing real to revoke server-side.
+ * For a normal unlink of a real key, use `unlinkAccount()` instead.
+ */
+export async function clearLocalAccountOnly(): Promise<void> {
+  await SecureStore.deleteItemAsync(KEY_API_KEY);
+  await SecureStore.deleteItemAsync(KEY_DEVICE_ID);
+  await SecureStore.deleteItemAsync(KEY_ENTITY_ID);
+  await SecureStore.deleteItemAsync(KEY_ENTITY_NAME);
+  await SecureStore.deleteItemAsync(KEY_ENTITY_SLUG);
+}
+
 export async function getLinkedAccount(): Promise<LinkedAccount | null> {
   const apiKey = await SecureStore.getItemAsync(KEY_API_KEY);
   if (!apiKey) return null;
@@ -147,12 +163,21 @@ export interface UploadResult {
 /**
  * Upload a signed photo/video to TETA+PI.
  * Called after capture if account is linked. Fire-and-forget is acceptable.
+ *
+ * `contentSignature`/`signatureAlg` (14.12) are the device's ECDSA signature
+ * over the SHA-256 hash of the file's raw bytes — the backend recomputes
+ * that hash from `file` itself and verifies `content_signature` against it
+ * using the device's registered public key. Kept as separate FormData
+ * fields, not embedded in `manifest_json`, so they're never confused with
+ * the (currently unverified) C2PA claim signature inside the manifest.
  */
 export async function uploadMedia(
   fileUri: string,
   mimeType: string,
   manifestJson: string,
   capturedAt: string,
+  contentSignature: string,
+  signatureAlg: string,
 ): Promise<UploadResult> {
   const account = await getLinkedAccount();
   if (!account) throw new Error('No linked account');
@@ -165,6 +190,8 @@ export async function uploadMedia(
   } as unknown as Blob);
   form.append('manifest_json', manifestJson);
   form.append('captured_at', capturedAt);
+  form.append('content_signature', contentSignature);
+  form.append('signature_alg', signatureAlg);
 
   const res = await fetch(`${API_BASE}/media/device-upload`, {
     method: 'POST',

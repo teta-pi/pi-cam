@@ -26,6 +26,7 @@ export interface SignedFile {
   manifest: C2PAManifest;
   contentHash: string;
   signature: string;
+  signatureAlg: string;
 }
 
 export interface VerifyResult {

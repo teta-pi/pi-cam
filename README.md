@@ -109,7 +109,7 @@ components/     Shared UI (pixel-perfect per design handoff)
   JsonTree           Collapsible C2PA manifest viewer
 
 modules/
-  crypto/       Keypair generation + Secure Enclave / Keystore storage
+  crypto/       Real ECDSA P-256 keypair (react-native-quick-crypto); private key in expo-secure-store (NOT hardware-backed)
   c2pa/         Offline C2PA manifest build + sign + verify
   watermark/    Badge overlay on shared copies (Phase 2)
 
@@ -122,7 +122,7 @@ hooks/
 
 | Level | Indicator | Description |
 |-------|-----------|-------------|
-| 🟡 Device Signed | Device-only | ECDSA signature from device Secure Enclave |
+| 🟡 Device Signed | Device-only | Real ECDSA P-256 signature from the device key (SecureStore, not hardware-backed) |
 | 🔴 Tampered | Error | Hash mismatch detected |
 
 There is currently only one real trust level. An earlier "Pi Verified"
@@ -138,8 +138,8 @@ All signing happens on-device with no network required:
 1. Capture → raw bytes
 2. SHA-256 hash of content
 3. C2PA manifest assembled locally
-4. Signed with device ECDSA keypair (Secure Enclave / Keystore)
-5. Manifest saved as JSON sidecar
+4. Content hash signed with the device's ECDSA P-256 key (private key in expo-secure-store, not hardware-backed)
+5. Manifest + signature saved as JSON sidecar
 6. Saved to device gallery
 
 Online CA upgrade (Phase 2) adds RFC 3161 timestamp + X.509 certificate.

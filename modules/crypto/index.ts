@@ -1,46 +1,31 @@
 /**
  * CryptoModule — keypair lifecycle.
- * Private key is stored in Secure Enclave (iOS) / Android Keystore via expo-secure-store.
- * All signing operations stay native-side; the raw private key is never passed to JS after storage.
- *
- * MVP uses a software key via expo-crypto (SHA-256 available cross-platform).
- * Phase 2: migrate sign() to react-native-quick-crypto with hardware-backed key.
+ * Real ECDSA P-256 keypair (react-native-quick-crypto, OpenSSL-backed). The
+ * private key is a PKCS8 PEM stored in expo-secure-store — encrypted at rest
+ * by the OS keychain/Keystore, but NOT hardware-backed (no Secure Enclave /
+ * Android StrongBox). The public key is exported as real SPKI PEM, parseable
+ * by any standard crypto library (`openssl ec -pubin`, Node's `crypto`, …).
  */
 
+import QuickCrypto from 'react-native-quick-crypto';
 import * as Crypto from 'expo-crypto';
-import { storeKeyPair, getPrivateKeyB64, getPublicKeyPem, keypairExists, deleteKeyPair, shortKey } from './keystore';
+import { storeKeyPair, getPrivateKeyPem, getPublicKeyPem, keypairExists, deleteKeyPair, isLegacyKeyFormat, shortKey } from './keystore';
 import type { KeyInfo } from './types';
 
-export { keypairExists, deleteKeyPair };
-
-function bufToB64(buf: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
-  return btoa(binary);
-}
-
-async function randomBytes(n: number): Promise<Uint8Array> {
-  return Crypto.getRandomBytesAsync(n);
-}
+export { keypairExists, deleteKeyPair, isLegacyKeyFormat };
 
 export async function generateKeypair(): Promise<KeyInfo> {
-  const seed = await randomBytes(32);
-  const seedB64 = bufToB64(seed);
+  const { publicKey, privateKey } = QuickCrypto.generateKeyPairSync('ec', {
+    namedCurve: 'P-256',
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  }) as { publicKey: string; privateKey: string };
 
-  const pubHash = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    seedB64,
-    { encoding: Crypto.CryptoEncoding.HEX }
-  );
-
-  const publicKeyPem =
-    `-----BEGIN PUBLIC KEY-----\n${btoa(pubHash)}\n-----END PUBLIC KEY-----`;
-
-  await storeKeyPair(seedB64, publicKeyPem);
+  await storeKeyPair(privateKey, publicKey);
 
   return {
-    publicKeyPem,
-    publicKeyShort: shortKey(publicKeyPem),
+    publicKeyPem: publicKey,
+    publicKeyShort: shortKey(publicKey),
     algorithm: 'ECDSA-P256',
     createdAt: new Date().toISOString(),
   };
@@ -57,18 +42,19 @@ export async function getPublicKey(): Promise<KeyInfo | null> {
   };
 }
 
+/**
+ * ECDSA-SHA256 signature over `data`, DER-encoded then base64'd. `data` is
+ * expected to be a hex-encoded SHA-256 content hash (see modules/c2pa) —
+ * callers that need to sign arbitrary strings can still pass any string.
+ */
 export async function sign(data: string): Promise<string> {
-  // Phase 1: HMAC-SHA256 using stored seed as key.
-  // Phase 2: ECDSA P-256 via hardware key.
-  const seed = await getPrivateKeyB64();
-  if (!seed) throw new Error('No keypair found. Call generateKeypair() first.');
+  const privateKeyPem = await getPrivateKeyPem();
+  if (!privateKeyPem) throw new Error('No keypair found. Call generateKeypair() first.');
 
-  const signature = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    seed + ':' + data,
-    { encoding: Crypto.CryptoEncoding.HEX }
-  );
-  return signature;
+  const signature = QuickCrypto.createSign('SHA256')
+    .update(data)
+    .sign(privateKeyPem, 'base64');
+  return signature as unknown as string;
 }
 
 export async function sha256(data: string): Promise<string> {
@@ -77,4 +63,12 @@ export async function sha256(data: string): Promise<string> {
     data,
     { encoding: Crypto.CryptoEncoding.HEX }
   );
+}
+
+/** SHA-256 of raw bytes (e.g. a captured file's actual content), hex-encoded. */
+export async function sha256Bytes(data: Uint8Array<ArrayBuffer>): Promise<string> {
+  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }

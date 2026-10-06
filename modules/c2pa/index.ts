@@ -6,9 +6,14 @@
 
 import { File, Directory, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
-import { sha256, sign, getPublicKey } from '../crypto';
+import { sha256Bytes, sign, getPublicKey } from '../crypto';
 import { buildManifest, serializeManifest } from './manifest';
 import type { SignedFile, VerifyResult, CaptureMetadata } from './types';
+
+// Matches manifest.ts signature_info.alg — the ECDSA curve (device key) +
+// hash used to produce `signature`. Backend contract (device-upload
+// FormData `signature_alg`).
+export const SIGNATURE_ALG = 'ecdsa-with-SHA256';
 
 function manifestDir(): Directory {
   return new Directory(Paths.document, 'manifests');
@@ -24,28 +29,35 @@ export async function signMedia(
   fileUri: string,
   meta: CaptureMetadata
 ): Promise<SignedFile> {
-  const b64 = await new File(fileUri).base64();
-  const contentHash = await sha256(b64);
+  // Hash the file's actual bytes — this must be the exact same hash the
+  // backend computes from the uploaded file, so the signature verifies
+  // against it server-side. (Previously hashed the base64 *text* of the
+  // content, which never matched a server-side hash of the raw bytes.)
+  const bytes = await new File(fileUri).bytes();
+  const contentHash = await sha256Bytes(bytes);
 
   const keyInfo = await getPublicKey();
   if (!keyInfo) throw new Error('No device key. Generate keypair first.');
 
   const manifest = buildManifest(contentHash, keyInfo.publicKeyShort, meta);
   const manifestJson = serializeManifest(manifest);
-  const signature = await sign(manifestJson);
+  // Sign the content hash itself, not the manifest — the device-upload
+  // contract verifies `content_signature` against the file hash it
+  // computes independently (manifest_json is uploaded separately).
+  const signature = await sign(contentHash);
 
   const dir = ensureManifestDir();
   new File(dir, `${contentHash.slice(0, 16)}.json`).write(
-    JSON.stringify({ manifest, signature })
+    JSON.stringify({ manifest, signature, signatureAlg: SIGNATURE_ALG })
   );
 
-  return { uri: fileUri, manifest, contentHash, signature };
+  return { uri: fileUri, manifest, contentHash, signature, signatureAlg: SIGNATURE_ALG };
 }
 
 export async function verifyMedia(fileUri: string): Promise<VerifyResult> {
   try {
-    const b64 = await new File(fileUri).base64();
-    const computedHash = await sha256(b64);
+    const bytes = await new File(fileUri).bytes();
+    const computedHash = await sha256Bytes(bytes);
 
     const dir = ensureManifestDir();
     const items = dir.list();
