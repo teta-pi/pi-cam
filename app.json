@@ -12,7 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#1A1A2E"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.pi.cam",
@@ -67,6 +69,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b60d9233-19be-4a91-b1ef-c06a2e6304c7"
+      }
     }
   }
 }
