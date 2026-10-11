@@ -1,5 +1,37 @@
 # Pi CAM — Changelog
 
+## 2026-10-12 · build · EAS build config, owner's first real-crypto build unblocked (session 14.13, manager)
+Done: the repo had no `eas.json` and no `extra.eas.projectId` in `app.json`,
+so every `eas build` the owner ran died before reaching the builder (and a
+`npm i -g eas-cli` attempt failed on `EACCES` against `/usr/local/lib`).
+Added `eas.json` (`preview` = internal distribution, Android
+`buildType: apk` so the artifact side-loads onto a device directly;
+`production` keeps `autoIncrement` with the remote `appVersionSource`) and
+wired `app.json` to the **existing** `@bob108/pi-cam` EAS project
+(`b60d9233`) rather than re-initializing — build history and Android
+credentials stay on one project. Also found and fixed the real reason the
+owner's earlier attempt would have proved nothing: the `eas init` /
+`build:configure` work from that attempt lived in a nested duplicate clone
+at `~/pi-cam/pi-cam` pinned to `3047740` — **two commits before** 14.12, so
+that tree had no `react-native-quick-crypto` at all and any build from it
+would have shipped the old fake-crypto app while looking like a successful
+test. Local `~/pi-cam` fast-forwarded to `main`, `npm ci` run, native deps
+(`react-native-quick-crypto`, `react-native-nitro-modules`) present,
+`expo config --json --full` exits 0, `eas project:info` resolves, and
+`eas whoami` is already authenticated — the owner's remaining step is one
+command: `npx eas-cli@latest build -p android --profile preview`.
+Changed: `eas.json` (new), `app.json` (`extra.eas.projectId`), this file.
+Risk: build-time config only, no app code touched. The APK profile is
+unsigned-for-store by design (internal distribution); do not use `preview`
+for a Play upload. `appVersionSource: remote` means version/build numbers
+come from EAS, not `app.json` — `versionCode: 1` in `app.json` is now
+decorative for cloud builds.
+Next: owner runs the build and side-loads the APK; the first invocation will
+offer to generate an Android keystore on the EAS project (expected, accept
+it). Then pair via `app.tetapi.dev` → `/profile` → **Connect Camera** → QR,
+and the manager session cross-checks the stored `device_public_key` with
+`openssl ec -pubin -text -noout` before any capture is attempted.
+
 ## 2026-10-06 · crypto · real ECDSA P-256 keys, SecureStore not Secure Enclave (session 14.12)
 Done: replaced the fake crypto in `modules/crypto` — `generateKeypair()` used
 to SHA-256 a random seed and wrap the hash in a fake PEM header, and `sign()`
