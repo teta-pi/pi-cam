@@ -4,7 +4,7 @@
 
 **Verified by Design** — C2PA-signed camera app for iOS & Android.
 
-Part of [TETA+PI](https://github.com/teta-pi/infra) — Trust Infrastructure
+Part of TETA+PI — Trust Infrastructure
 for Digital Entities. Every capture signed on-device becomes a verified
 block on the creator's TETA+PI profile: link an account via QR
 (`modules/account`), then each photo/video uploads through
