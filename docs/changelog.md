@@ -1,5 +1,34 @@
 # Pi CAM — Changelog
 
+## 2026-11-26 · deps · npm audit green: metro 0.83.8, postcss 8.5.33, decode-uri-component port (session 15.14, security)
+Done: `npm audit --omit=dev --audit-level=high` goes from 1 critical + 15 high
+to 0 high/critical (17 moderate remain, none with a non-major fix). Nothing
+flagged runs on the device except one package, and that package is not called:
+- Build-time only (Expo CLI, Metro, config plugins, dev tooling): @xmldom/xmldom
+  0.8.15/0.9.12, shell-quote 1.12.0, undici 6.29.1, node-forge 1.4.4,
+  compression 1.8.2, browserslist 4.29.6, js-yaml 4.3.2/3.15.2, brace-expansion,
+  nanoid 3.3.20, source-map-js 1.2.4. Updated in the lockfile within their
+  existing ranges (`npm update <pkg>`, not `npm audit fix`, because that also
+  bumps expo to 54.0.38 and nests SDK-58 packages under `expo/node_modules`).
+- postcss 8.4.49 → 8.5.33 (`overrides`). Used only by @expo/metro-config for web CSS.
+- image-size: Metro 0.83.3 used it on our own committed assets at bundle time.
+  Fixed by overriding the whole metro family to 0.83.8 (same 0.83-stable line),
+  which no longer depends on image-size.
+- decode-uri-component 0.2.2 (expo-router 6 → query-string 7). The fix is 0.5.1,
+  which is ESM-only, and query-string 7 `require()`s it. `vendor/decode-uri-component`
+  is upstream 0.5.1 with only the export syntax changed, wired in by `overrides`.
+  expo-router only calls `stringify`, so the vulnerable decode path is not used
+  today. See `vendor/README.md`.
+Changed: `package.json` (`overrides`, one `file:` dependency), `package-lock.json`,
+`vendor/` (new), this file.
+Risk: no native module changed version (no expo-*, react-native-* or
+nitro/quick-crypto bump), so no new native build is forced. The JS reaches
+devices only with the next EAS build. Checked: `npm ci` from the lockfile,
+`expo export` for android and ios (Hermes bundles build and include the port),
+jest 12/13. The one failing test (openssl PEM check) fails the same on main.
+Next: drop the metro overrides and the vendor port when Expo ships an SDK 54
+patch that pins metro ≥0.83.8 and an expo-router that no longer uses query-string 7.
+
 ## 2026-10-12 · build · EAS build config, owner's first real-crypto build unblocked (session 14.13, manager)
 Done: the repo had no `eas.json` and no `extra.eas.projectId` in `app.json`,
 so every `eas build` the owner ran died before reaching the builder (and a
